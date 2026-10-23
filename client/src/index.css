@@ -1,0 +1,10 @@
+/* index.css — global reset only. Keeps everything else self-contained. */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #1a1a2e; }
+code {
+  font-family: 'Courier New', monospace;
+  background: #0f3460;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
