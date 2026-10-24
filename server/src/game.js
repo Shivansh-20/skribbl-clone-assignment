@@ -31,7 +31,7 @@ export function clearRoomTimer(room) {
 }
 
 // ============================================================================
-// ✍️ PIECE #7: TURN & ROUND ADVANCE (YOUR CODE GOES HERE)
+// ✍️ PIECE #7: TURN & ROUND ADVANCE
 // ============================================================================
 
 /**
@@ -41,9 +41,7 @@ export function clearRoomTimer(room) {
  */
 export function buildMask(word) {
   if (typeof word !== 'string') return '';
-  // Replace every English letter (a-z, A-Z) with an underscore (_)
-  // Spaces and hyphens are preserved!
- return word.replace(/[a-zA-Z]/g, '_'); 
+  return word.replace(/[a-zA-Z]/g, '_');
 }
 
 /**
@@ -54,34 +52,37 @@ export function buildMask(word) {
 export function nextTurn(room) {
   const totalPlayers = room.players.length;
   const maxRounds = room.settings.rounds || 3;
+
   // Move to the next player in the array
   let nextDrawerIndex = room.drawerIndex + 1;
-  letnexrRound  =room.round;
+  let nextRound = room.round;
 
   // If nextDrawerIndex is past the last player, a full cycle has finished!
   if (nextDrawerIndex >= totalPlayers) {
-    nextDrawerIndex = 0; // reset back to first player
-    nextRound = nextRound + 1; // Advance rounds number
+    nextDrawerIndex = 0;       // Reset back to first player
+    nextRound = nextRound + 1;  // Advance round number
+  }
 
-  // initial, if strating Round 1 for the very first time
-    if (nextRound === 0) {
-      nextRound = 1;
+  // If starting Round 1 for the very first time
+  if (nextRound === 0) {
+    nextRound = 1;
+  }
 
-  // if we have exceeded total rounds -> Game over!
-      if (nextRound > maxRounds) {
-        return {
-          phase: 'game_over!',
-          round: room.round,
-          drawerIndex: room.drawerIndex,
-        };
-      }
-
-    // otherwise , start next turn in choosing phase
+  // If we have exceeded total rounds -> Game Over!
+  if (nextRound > maxRounds) {
     return {
-      phase: 'choosing',
-      round: nextRound,
-      drawerIndex: nextDrawerIndex,
-    };    
+      phase: 'game_over',
+      round: room.round,
+      drawerIndex: room.drawerIndex,
+    };
+  }
+
+  // Otherwise, start next turn in choosing phase
+  return {
+    phase: 'choosing',
+    round: nextRound,
+    drawerIndex: nextDrawerIndex,
+  };
 }
 
 // ============================================================================

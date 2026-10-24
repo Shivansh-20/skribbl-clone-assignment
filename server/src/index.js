@@ -1,5 +1,5 @@
 // server/src/index.js
-// Phase 1 + Phase 2: Adding Real-Time Drawing synchronization to the server.
+// Phase 3: Integrating the Game Loop (Turns, Timers, Word Selection & Drawer Permissions).
 
 import express          from 'express';
 import { createServer } from 'http';
@@ -15,6 +15,15 @@ import {
   sanitizeSettings,
   getRoomBySocket,
 } from './rooms.js';
+
+// Import Game State Machine functions from game.js
+import {
+  startTurn,
+  chooseWord,
+  endRound,
+  clearRoomTimer,
+  getPublicSnapshot,
+} from './game.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT ?? 3001;
@@ -34,7 +43,7 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 
-// ─── HTTP server + Socket.IO ────────────────────────────────────────────────
+// ─── HTTP Server + Socket.IO ────────────────────────────────────────────────
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
@@ -42,6 +51,11 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
   },
 });
+
+// Helper: Check if socket is the active drawer
+function isDrawer(socket, room) {
+  return room?.players[room.drawerIndex]?.id === socket.id;
+}
 
 io.on('connection', (socket) => {
   console.log(`[+] connected: ${socket.id}`);
@@ -67,7 +81,12 @@ io.on('connection', (socket) => {
       phase: 'lobby',
       round: 0,
       drawerIndex: -1,
-      strokes: [], // Stores all finished strokes so late joiners & undo work!
+      word: null,
+      wordOptions: [],
+      mask: '',
+      timeLeft: 0,
+      strokes: [],
+      timer: null,
     };
 
     rooms.set(code, room);
@@ -75,7 +94,7 @@ io.on('connection', (socket) => {
     socket.join(code);
 
     console.log(`[${code}] Room created by host "${player.name}" (${socket.id})`);
-    ack({ ok: true, code, room });
+    ack({ ok: true, code, room: getPublicSnapshot(room) });
   });
 
   // ── 2. Join Room ───────────────────────────────────────────────────────────
@@ -105,13 +124,13 @@ io.on('connection', (socket) => {
 
     console.log(`[${code}] "${player.name}" joined (${room.players.length}/${room.settings.maxPlayers})`);
 
-    // Broadcast to room
+    // Broadcast updated player list
     io.to(code).emit('player_joined', { players: room.players });
 
-    // Send existing drawing history to this new player (Late Joiner feature)
+    // Send stroke history to late joiners
     socket.emit('strokes_sync', { strokes: room.strokes });
 
-    ack({ ok: true, code, room });
+    ack({ ok: true, code, room: getPublicSnapshot(room) });
   });
 
   // ── 3. Start Game (Host only) ──────────────────────────────────────────────
@@ -119,21 +138,44 @@ io.on('connection', (socket) => {
     const room = getRoomBySocket(socket);
     if (!room || socket.id !== room.hostId) return;
 
-    console.log(`[${room.code}] Host started the game! Transitioning to drawing screen.`);
-    room.phase = 'drawing';
-    io.to(room.code).emit('game_started');
+    if (room.players.length < 2) {
+      console.warn(`[${room.code}] Need at least 2 players to start.`);
+      return;
+    }
+
+    console.log(`[${room.code}] Game started by host! Starting Turn 1...`);
+    room.round = 1;
+    room.drawerIndex = -1; // startTurn will increment this to index 0
+
+    // Begin the turn cycle!
+    startTurn(io, room);
   });
 
-  // ── 4. Drawing: draw_start ─────────────────────────────────────────────────
-  // Drawer starts a new stroke
+  // ── 4. Word Chosen (Drawer only) ───────────────────────────────────────────
+  socket.on('word_chosen', (payload) => {
+    const room = getRoomBySocket(socket);
+    if (!room || room.phase !== 'choosing') return;
+
+    // Security: Only the active drawer can pick a word
+    if (!isDrawer(socket, room)) return;
+
+    const word = payload?.word;
+    if (typeof word !== 'string') return;
+
+    chooseWord(io, room, word);
+  });
+
+  // ── 5. Drawing: draw_start ─────────────────────────────────────────────────
   socket.on('draw_start', (payload) => {
     const room = getRoomBySocket(socket);
-    if (!room) return;
+    if (!room || room.phase !== 'drawing') return;
+
+    // Security Guard: Only the designated drawer can draw!
+    if (!isDrawer(socket, room)) return;
 
     const { x, y, color, size } = payload || {};
     if (typeof x !== 'number' || typeof y !== 'number') return;
 
-    // Start a new stroke in server memory
     const stroke = {
       color: color || '#000000',
       size: size || 8,
@@ -141,7 +183,6 @@ io.on('connection', (socket) => {
     };
     room.strokes.push(stroke);
 
-    // Relay to everyone ELSE in this room (the drawer already drew locally!)
     socket.to(room.code).emit('draw_data', {
       kind: 'start',
       x,
@@ -151,92 +192,130 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ── 5. Drawing: draw_move ──────────────────────────────────────────────────
-  // Drawer continues moving mouse
+  // ── 6. Drawing: draw_move ──────────────────────────────────────────────────
   socket.on('draw_move', (payload) => {
     const room = getRoomBySocket(socket);
-    if (!room) return;
+    if (!room || room.phase !== 'drawing') return;
+
+    // Security Guard: Only drawer can draw!
+    if (!isDrawer(socket, room)) return;
 
     const { x, y } = payload || {};
     if (typeof x !== 'number' || typeof y !== 'number') return;
 
-    // Append point to current stroke
     const currentStroke = room.strokes[room.strokes.length - 1];
     if (currentStroke) {
       currentStroke.points.push({ x, y });
     }
 
-    // Relay to other players
     socket.to(room.code).emit('draw_data', { kind: 'move', x, y });
   });
 
-  // ── 6. Drawing: draw_end ───────────────────────────────────────────────────
-  // Drawer lifts mouse
+  // ── 7. Drawing: draw_end ───────────────────────────────────────────────────
   socket.on('draw_end', () => {
     const room = getRoomBySocket(socket);
-    if (!room) return;
+    if (!room || room.phase !== 'drawing') return;
+    if (!isDrawer(socket, room)) return;
 
     socket.to(room.code).emit('draw_data', { kind: 'end' });
   });
 
-  // ── 7. Drawing: canvas_clear ───────────────────────────────────────────────
+  // ── 8. Drawing: canvas_clear ───────────────────────────────────────────────
   socket.on('canvas_clear', () => {
     const room = getRoomBySocket(socket);
-    if (!room) return;
+    if (!room || room.phase !== 'drawing') return;
+    if (!isDrawer(socket, room)) return;
 
-    room.strokes = []; // Wipe strokes history
-    console.log(`[${room.code}] Canvas cleared.`);
+    room.strokes = [];
+    console.log(`[${room.code}] Canvas cleared by drawer.`);
     io.to(room.code).emit('canvas_clear');
   });
 
-  // ── 8. Drawing: draw_undo ──────────────────────────────────────────────────
+  // ── 9. Drawing: draw_undo ──────────────────────────────────────────────────
   socket.on('draw_undo', () => {
     const room = getRoomBySocket(socket);
-    if (!room || room.strokes.length === 0) return;
+    if (!room || room.phase !== 'drawing') return;
+    if (!isDrawer(socket, room) || room.strokes.length === 0) return;
 
-    room.strokes.pop(); // Remove last finished stroke
-    console.log(`[${room.code}] Undo: ${room.strokes.length} strokes remaining.`);
-    // Tell everyone in room to wipe and replay remaining strokes
+    room.strokes.pop();
     io.to(room.code).emit('strokes_sync', { strokes: room.strokes });
   });
 
-  // ── 9. Disconnect ──────────────────────────────────────────────────────────
+  // ── 10. Disconnect ─────────────────────────────────────────────────────────
   socket.on('disconnect', (reason) => {
     console.log(`[-] disconnected: ${socket.id} (${reason})`);
 
     const room = getRoomBySocket(socket);
     if (!room) return;
 
-    const leavingIndex = room.players.findIndex(p => p.id === socket.id);
+    const leavingIndex = room.players.findIndex((p) => p.id === socket.id);
     const leavingPlayer = room.players[leavingIndex];
+    const wasDrawer = isDrawer(socket, room);
+    const wasHost = socket.id === room.hostId;
 
     if (leavingIndex !== -1) {
       room.players.splice(leavingIndex, 1);
+      // Keep drawer index aligned if someone before drawer leaves
+      if (leavingIndex <= room.drawerIndex) {
+        room.drawerIndex--;
+      }
     }
 
+    // If room is empty, clear active timers and delete room
     if (room.players.length === 0) {
+      clearRoomTimer(room);
       rooms.delete(room.code);
       console.log(`[${room.code}] Room deleted (all players left).`);
       return;
     }
 
-    if (socket.id === room.hostId) {
+    // Host migration
+    if (wasHost) {
       room.hostId = room.players[0].id;
       console.log(`[${room.code}] Host migrated to "${room.players[0].name}"`);
     }
 
+    // Notify room of departure
     io.to(room.code).emit('player_left', {
       playerId: socket.id,
       playerName: leavingPlayer?.name,
       players: room.players,
       hostId: room.hostId,
     });
+
+    // If game was active and the drawer left -> end round immediately!
+    if (room.phase === 'choosing' || room.phase === 'drawing') {
+      if (wasDrawer) {
+        console.log(`[${room.code}] Drawer disconnected! Ending round early.`);
+        endRound(io, room);
+      }
+    }
   });
 });
 
-// ─── Start listening ─────────────────────────────────────────────────────────
+// ─── Start Listening ─────────────────────────────────────────────────────────
 httpServer.listen(PORT, () => {
-  console.log(`\n✅  Phase 2 Server Ready (Real-Time Drawing Enabled)`);
+  console.log(`\n✅  Phase 3 Server Ready (Game Loop Engine Running)`);
   console.log(`   Local:  http://localhost:${PORT}`);
   console.log(`   Health: http://localhost:${PORT}/health\n`);
 });
+
+/*
+================================================================================
+📜 FILE LIFECYCLE & EXECUTION FLOW SUMMARY: index.js
+================================================================================
+1. Room Lifecycle:
+   - create_room / join_room manages membership.
+2. Game Start:
+   - start_game (Host only) calls startTurn() in game.js.
+3. Turn Flow:
+   - Drawer receives word_options privately, emits word_chosen { word }.
+   - chooseWord() transitions room to 'drawing', starts countdown.
+4. Security & Permissions:
+   - draw_start, draw_move, draw_end, canvas_clear, draw_undo strictly check:
+     isDrawer(socket, room) === true AND room.phase === 'drawing'.
+   - Guessers attempting to draw are silently ignored!
+5. Edge Cases:
+   - If the active drawer disconnects mid-round, endRound() ends the turn early.
+================================================================================
+*/
