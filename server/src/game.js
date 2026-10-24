@@ -40,8 +40,10 @@ export function clearRoomTimer(room) {
  * Must keep spaces and hyphens intact!
  */
 export function buildMask(word) {
-  // TODO: [Piece #7 - Part A] Write your buildMask code here!
-  // Leave empty for now. You will write this yourself.
+  if (typeof word !== 'string') return '';
+  // Replace every English letter (a-z, A-Z) with an underscore (_)
+  // Spaces and hyphens are preserved!
+ return word.replace(/[a-zA-Z]/g, '_'); 
 }
 
 /**
@@ -50,8 +52,36 @@ export function buildMask(word) {
  * Returns: { phase, round, drawerIndex }
  */
 export function nextTurn(room) {
-  // TODO: [Piece #7 - Part B] Write your nextTurn code here!
-  // Leave empty for now. You will write this yourself.
+  const totalPlayers = room.players.length;
+  const maxRounds = room.settings.rounds || 3;
+  // Move to the next player in the array
+  let nextDrawerIndex = room.drawerIndex + 1;
+  letnexrRound  =room.round;
+
+  // If nextDrawerIndex is past the last player, a full cycle has finished!
+  if (nextDrawerIndex >= totalPlayers) {
+    nextDrawerIndex = 0; // reset back to first player
+    nextRound = nextRound + 1; // Advance rounds number
+
+  // initial, if strating Round 1 for the very first time
+    if (nextRound === 0) {
+      nextRound = 1;
+
+  // if we have exceeded total rounds -> Game over!
+      if (nextRound > maxRounds) {
+        return {
+          phase: 'game_over!',
+          round: room.round,
+          drawerIndex: room.drawerIndex,
+        };
+      }
+
+    // otherwise , start next turn in choosing phase
+    return {
+      phase: 'choosing',
+      round: nextRound,
+      drawerIndex: nextDrawerIndex,
+    };    
 }
 
 // ============================================================================
