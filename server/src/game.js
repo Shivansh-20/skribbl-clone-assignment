@@ -3,6 +3,7 @@
 // This is the core state machine for Skribbl.
 
 import wordsData from './words.json' with { type: 'json' };
+import { checkGuess, calcGuesserPoints, calcDrawerPoints } from './scoring.js';
 
 const CHOOSE_TIME = 15; // Drawer has 15 seconds to pick a word
 const ROUND_END_PAUSE = 5; // 5-second pause at round end to reveal word
@@ -121,6 +122,7 @@ export function startTurn(io, room) {
   room.word = null;   // Secret word is hidden
   room.mask = '';
   room.timeLeft = CHOOSE_TIME;
+  room.guessedCount = 0; // Tracks how many players correctly guessed this round
 
   // Reset guessing status for all players
   for (const player of room.players) {
@@ -209,6 +211,24 @@ export function endRound(io, room) {
 
   console.log(`[${room.code}] Round ended. Secret word was: "${room.word}"`);
 
+  // Award points to the drawer based on how many players guessed correctly
+  const drawer = room.players[room.drawerIndex];
+  const guesserCount = room.players.length - 1;
+  if (drawer && guesserCount > 0) {
+    const drawerPoints = calcDrawerPoints({
+      correctCount: room.guessedCount || 0,
+      guesserCount,
+    });
+    drawer.score = (drawer.score || 0) + drawerPoints;
+    if (drawerPoints > 0) {
+      io.to(room.code).emit('chat_message', {
+        id: Math.random().toString(36).substring(2, 9),
+        kind: 'system',
+        text: `🎨 ${drawer.name} earned ${drawerPoints} pts as the drawer!`,
+      });
+    }
+  }
+
   // Reveal the secret word and updated scores to everyone
   io.to(room.code).emit('round_end', {
     word: room.word,
@@ -219,6 +239,21 @@ export function endRound(io, room) {
   room.timer = setTimeout(() => {
     startTurn(io, room);
   }, ROUND_END_PAUSE * 1000);
+}
+
+// ============================================================================
+// Piece #8: Guess Handler State Flow
+// ============================================================================
+
+/**
+ * 4. Process incoming guess from a player:
+ * @param {object} io - Socket.IO server instance
+ * @param {object} socket - Socket of the guessing player
+ * @param {object} room - Current room state
+ * @param {string} text - Raw guess text submitted by player
+ */
+export function handleGuess(io, socket, room, text) {
+  // TODO: [Piece #8] Write handleGuess here in VS Code!
 }
 
 /**
@@ -243,29 +278,3 @@ export function getPublicSnapshot(room) {
     timeLeft: room.timeLeft,
   };
 }
-
-/*
-================================================================================
-📜 FILE LIFECYCLE & EXECUTION FLOW SUMMARY
-================================================================================
-This file is the authoritative state machine for a Skribbl game room.
-
-1. startTurn(io, room):
-   - Triggered when Host starts the game or when a previous round ends.
-   - Calls your nextTurn() function to increment drawerIndex or round.
-   - If rounds exceed max, triggers game_over event and builds leaderboard.
-   - Otherwise, sets phase to 'choosing', picks 3 random words, sends them
-     PRIVATELY to drawer via socket.emit('word_options'), and starts a 15s timer.
-
-2. chooseWord(io, room, word):
-   - Triggered when drawer selects a word (or 15s timer auto-selects).
-   - Calls your buildMask() function to create underscores (e.g. "___").
-   - Sets phase to 'drawing', stores secret word on server, and sends mask to all.
-   - Starts drawing countdown timer (e.g. 80 seconds).
-
-3. endRound(io, room):
-   - Triggered when draw timer reaches 0 (or all guessers succeed in Phase 4).
-   - Sets phase to 'round_end', reveals the secret word to all players.
-   - Starts a 5-second timeout, then loops back to startTurn() for the next player!
-================================================================================
-*/

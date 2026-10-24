@@ -23,6 +23,7 @@ import {
   endRound,
   clearRoomTimer,
   getPublicSnapshot,
+  handleGuess,
 } from './game.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -241,7 +242,18 @@ io.on('connection', (socket) => {
     io.to(room.code).emit('strokes_sync', { strokes: room.strokes });
   });
 
-  // ── 10. Disconnect ─────────────────────────────────────────────────────────
+  // ── 10. Guess / Chat (Phase 4) ─────────────────────────────────────────────
+  socket.on('guess', (payload) => {
+    const room = getRoomBySocket(socket);
+    if (!room) return;
+
+    const text = typeof payload?.text === 'string' ? payload.text : '';
+    if (!text.trim()) return;
+
+    handleGuess(io, socket, room, text);
+  });
+
+  // ── 11. Disconnect ─────────────────────────────────────────────────────────
   socket.on('disconnect', (reason) => {
     console.log(`[-] disconnected: ${socket.id} (${reason})`);
 
@@ -299,23 +311,3 @@ httpServer.listen(PORT, () => {
   console.log(`   Local:  http://localhost:${PORT}`);
   console.log(`   Health: http://localhost:${PORT}/health\n`);
 });
-
-/*
-================================================================================
-📜 FILE LIFECYCLE & EXECUTION FLOW SUMMARY: index.js
-================================================================================
-1. Room Lifecycle:
-   - create_room / join_room manages membership.
-2. Game Start:
-   - start_game (Host only) calls startTurn() in game.js.
-3. Turn Flow:
-   - Drawer receives word_options privately, emits word_chosen { word }.
-   - chooseWord() transitions room to 'drawing', starts countdown.
-4. Security & Permissions:
-   - draw_start, draw_move, draw_end, canvas_clear, draw_undo strictly check:
-     isDrawer(socket, room) === true AND room.phase === 'drawing'.
-   - Guessers attempting to draw are silently ignored!
-5. Edge Cases:
-   - If the active drawer disconnects mid-round, endRound() ends the turn early.
-================================================================================
-*/

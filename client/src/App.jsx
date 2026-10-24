@@ -1,5 +1,5 @@
 // client/src/App.jsx
-// Phase 3: Manages full game loop events, word selection state, and timers.
+// Phase 4: Chat messages, guess feedback, and full score synchronization.
 
 import { useState, useEffect } from 'react';
 import socket from './socket.js';
@@ -11,12 +11,14 @@ export default function App() {
   const [screen, setScreen] = useState('home'); // 'home' | 'lobby' | 'game'
   const [room, setRoom] = useState(null);
   const [syncedStrokes, setSyncedStrokes] = useState([]);
-
-  // Word choices presented to the drawer during 'choosing' phase
   const [wordOptions, setWordOptions] = useState([]);
-
-  // Revealed word shown to everyone when round ends
   const [revealedWord, setRevealedWord] = useState(null);
+
+  // Chat message history
+  const [messages, setMessages] = useState([]);
+
+  // Flag to briefly flash the orange "You're so close!" hint to the sender
+  const [showCloseHint, setShowCloseHint] = useState(false);
 
   useEffect(() => {
     // ── Player Joined ──
@@ -26,7 +28,6 @@ export default function App() {
 
     // ── Player Left ──
     socket.on('player_left', ({ playerName, players, hostId }) => {
-      console.log(`[socket] ${playerName || 'Player'} left.`);
       setRoom((prev) => (prev ? { ...prev, players, hostId } : prev));
     });
 
@@ -42,17 +43,24 @@ export default function App() {
       }
     });
 
-    // ── Round Start (Turn Begins) ──
+    // ── Round Start ──
     socket.on('round_start', ({ drawerId, drawerName, round }) => {
-      console.log(`[socket] Round ${round} started. Drawer: ${drawerName}`);
       setWordOptions([]);
       setRevealedWord(null);
       setScreen('game');
+      // Announce the new round in chat
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + Math.random(),
+          kind: 'system',
+          text: `Round ${round} started! ${drawerName} is drawing.`,
+        },
+      ]);
     });
 
     // ── Word Choices (Sent ONLY to Drawer) ──
     socket.on('word_options', ({ options }) => {
-      console.log('[socket] Received secret word options:', options);
       setWordOptions(options);
     });
 
@@ -63,7 +71,6 @@ export default function App() {
 
     // ── Round End (Word Revealed) ──
     socket.on('round_end', ({ word, scores }) => {
-      console.log(`[socket] Round ended. Word was: ${word}`);
       setRevealedWord(word);
       setWordOptions([]);
       setRoom((prev) => {
@@ -74,20 +81,38 @@ export default function App() {
           players: scores || prev.players,
         };
       });
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + Math.random(),
+          kind: 'system',
+          text: `Round ended! The word was: "${word}".`,
+        },
+      ]);
     });
 
-    // ── Game Over (All Rounds Complete) ──
+    // ── Incoming Chat or Guess Message ──
+    socket.on('chat_message', (msg) => {
+      setMessages((prev) => [...prev, { ...msg, id: Date.now() + Math.random() }]);
+    });
+
+    // ── Private "Close!" Hint for the Sender ──
+    socket.on('guess_close', () => {
+      setShowCloseHint(true);
+      setTimeout(() => setShowCloseHint(false), 2500); // Disappear after 2.5s
+    });
+
+    // ── Game Over ──
     socket.on('game_over', ({ winner, leaderboard }) => {
-      alert(`🏆 GAME OVER! Winner: ${winner?.name || 'Nobody'} with ${winner?.score || 0} pts!`);
+      alert(`🏆 GAME OVER!\nWinner: ${winner?.name || 'Nobody'} with ${winner?.score || 0} pts!`);
       setScreen('lobby');
     });
 
-    // ── Stroke Sync (Late join or Undo) ──
+    // ── Stroke Sync & Clear ──
     socket.on('strokes_sync', ({ strokes }) => {
       setSyncedStrokes(strokes || []);
     });
 
-    // ── Canvas Clear ──
     socket.on('canvas_clear', () => {
       setSyncedStrokes([]);
     });
@@ -100,6 +125,8 @@ export default function App() {
       socket.off('word_options');
       socket.off('timer_tick');
       socket.off('round_end');
+      socket.off('chat_message');
+      socket.off('guess_close');
       socket.off('game_over');
       socket.off('strokes_sync');
       socket.off('canvas_clear');
@@ -125,6 +152,7 @@ export default function App() {
     setSyncedStrokes([]);
     setWordOptions([]);
     setRevealedWord(null);
+    setMessages([]);
     setScreen('home');
 
     const url = new URL(window.location.href);
@@ -132,7 +160,6 @@ export default function App() {
     window.history.replaceState({}, '', url.pathname);
   }
 
-  // ── Render Active Screen ──
   if (screen === 'game' && room) {
     return (
       <GameScreen
@@ -140,6 +167,8 @@ export default function App() {
         syncedStrokes={syncedStrokes}
         wordOptions={wordOptions}
         revealedWord={revealedWord}
+        messages={messages}
+        showCloseHint={showCloseHint}
         onLeaveRoom={handleLeaveRoom}
       />
     );
@@ -151,20 +180,3 @@ export default function App() {
 
   return <Home onJoinedRoom={handleJoinedRoom} />;
 }
-
-/*
-================================================================================
-📜 FILE LIFECYCLE & EXECUTION FLOW SUMMARY: App.jsx
-================================================================================
-1. State Management:
-   - screen: 'home' | 'lobby' | 'game'.
-   - wordOptions: Temporarily holds the 3 word choices for the active drawer.
-   - revealedWord: Holds the secret word revealed during 'round_end'.
-2. Event Wiring:
-   - round_start -> resets round UI and switches to GameScreen.
-   - word_options -> populates wordOptions modal for drawer.
-   - timer_tick -> updates room.timeLeft every 1 second.
-   - round_end -> displays the revealed word and updates scores.
-   - game_over -> shows victory alert and transitions back to lobby.
-================================================================================
-*/

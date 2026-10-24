@@ -1,6 +1,5 @@
 // client/src/components/Canvas.jsx
-// Phase 2: Canvas component that handles mouse drawing, local rendering,
-// and WebSocket synchronization across all players.
+// Phase 2 + 3: Canvas component with smooth mouse tracking and live sync.
 
 import { useRef, useEffect, useCallback } from 'react';
 import socket from '../socket.js';
@@ -24,17 +23,13 @@ export default function Canvas({ isDrawer, color, size, syncedStrokes }) {
     if (!canvas) return;
 
     function resizeCanvas() {
-      // Set the canvas internal drawing resolution to match its visible CSS size
       canvas.width = canvas.offsetWidth;
       canvas.height = canvas.offsetHeight;
-      // After resize, redraw existing strokes so canvas doesn't turn blank
       const ctx = canvas.getContext('2d');
       redrawAll(ctx, canvas, syncedStrokes);
     }
 
     resizeCanvas();
-
-    // Use ResizeObserver so if the window shrinks or expands, resolution adapts
     const observer = new ResizeObserver(resizeCanvas);
     observer.observe(canvas);
     return () => observer.disconnect();
@@ -54,13 +49,11 @@ export default function Canvas({ isDrawer, color, size, syncedStrokes }) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
-    // Received live drawing packet from server
     function onDrawData(data) {
       const { kind, x, y, color: remoteColor, size: remoteSize } = data;
 
       if (kind === 'start') {
         remoteLastPoint.current = { x, y };
-        // Draw a single dot in case the user just clicked without dragging
         drawSegment(ctx, canvas, { x, y }, { x, y }, remoteColor, remoteSize);
       } else if (kind === 'move' && remoteLastPoint.current) {
         drawSegment(ctx, canvas, remoteLastPoint.current, { x, y }, remoteColor, remoteSize);
@@ -70,7 +63,6 @@ export default function Canvas({ isDrawer, color, size, syncedStrokes }) {
       }
     }
 
-    // Received canvas_clear from drawer
     function onClear() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
@@ -97,27 +89,39 @@ export default function Canvas({ isDrawer, color, size, syncedStrokes }) {
     isDrawing.current = true;
     lastPoint.current = pt;
 
-    // Draw locally first for instant feedback (0 latency)
     drawSegment(ctx, canvas, pt, pt, color, size);
-
-    // Send draw_start to server
     socket.emit('draw_start', { x: pt.x, y: pt.y, color, size });
   }, [isDrawer, color, size]);
 
   // Mouse Moved -> Continue stroke
   const handleMouseMove = useCallback((e) => {
-    if (!isDrawer || !isDrawing.current || !lastPoint.current) return;
+    if (!isDrawer) return;
+
+    // Safety: If mouse button is NOT held down (e.buttons === 0), don't draw!
+    if (e.buttons !== 1) {
+      if (isDrawing.current) {
+        isDrawing.current = false;
+        lastPoint.current = null;
+        socket.emit('draw_end');
+      }
+      return;
+    }
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const pt = getPoint(e, canvas);
 
-    // Draw line locally from last point to current point
+    // If we just re-entered the canvas with button still held, start seamlessly
+    if (!isDrawing.current || !lastPoint.current) {
+      isDrawing.current = true;
+      lastPoint.current = pt;
+      drawSegment(ctx, canvas, pt, pt, color, size);
+      socket.emit('draw_start', { x: pt.x, y: pt.y, color, size });
+      return;
+    }
+
     drawSegment(ctx, canvas, lastPoint.current, pt, color, size);
-
-    // Send draw_move to server
     socket.emit('draw_move', { x: pt.x, y: pt.y });
-
     lastPoint.current = pt;
   }, [isDrawer, color, size]);
 
@@ -127,8 +131,6 @@ export default function Canvas({ isDrawer, color, size, syncedStrokes }) {
 
     isDrawing.current = false;
     lastPoint.current = null;
-
-    // Tell server the stroke is finished
     socket.emit('draw_end');
   }, [isDrawer]);
 
@@ -143,7 +145,8 @@ export default function Canvas({ isDrawer, color, size, syncedStrokes }) {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp} // If mouse leaves canvas, finish stroke cleanly
+        // If mouse leaves, we don't abruptly kill the stroke if they drag right back in
+        onMouseLeave={handleMouseUp}
       />
     </div>
   );
@@ -158,6 +161,7 @@ const styles = {
     boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
     overflow: 'hidden',
     position: 'relative',
+    userSelect: 'none', // Prevents accidental text selection while dragging fast
   },
   canvas: {
     display: 'block',
