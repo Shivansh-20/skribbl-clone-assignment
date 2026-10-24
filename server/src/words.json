@@ -1,0 +1,21 @@
+{
+  "animals": [
+    "cat", "dog", "elephant", "giraffe", "penguin", "dolphin", "kangaroo",
+    "butterfly", "octopus", "lion", "tiger", "rabbit", "monkey", "turtle",
+    "shark", "panda", "owl", "frog", "zebra", "whale", "bear", "duck"
+  ],
+  "food": [
+    "pizza", "burger", "banana", "apple", "ice cream", "cookie", "cake",
+    "sandwich", "hot-dog", "donut", "sushi", "taco", "popcorn", "pancake",
+    "strawberry", "watermelon", "pineapple", "chocolate", "cheese", "egg"
+  ],
+  "objects": [
+    "guitar", "bicycle", "umbrella", "diamond", "rocket", "clock", "scissors",
+    "telescope", "camera", "chair", "ladder", "candle", "hammer", "trophy",
+    "backpack", "key", "lightbulb", "balloon", "glasses", "crown", "sword"
+  ],
+  "nature": [
+    "mountain", "rainbow", "volcano", "sunflower", "cactus", "snowflake",
+    "cloud", "waterfall", "island", "campfire", "tree", "lightning", "tornado"
+  ]
+}
