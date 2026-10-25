@@ -13,6 +13,7 @@ export default function App() {
   const [room, setRoom] = useState(null);
   const [syncedStrokes, setSyncedStrokes] = useState([]);
   const [wordOptions, setWordOptions] = useState([]);
+  const [drawerWord, setDrawerWord] = useState(null);
   const [revealedWord, setRevealedWord] = useState(null);
   const [messages, setMessages] = useState([]);
   const [showCloseHint, setShowCloseHint] = useState(false);
@@ -44,6 +45,7 @@ export default function App() {
         setScreen('lobby');
         setGameOverData(null); // Dismiss any stale Game Over overlay!
         setWordOptions([]);
+        setDrawerWord(null);
         setRevealedWord(null);
         setSyncedStrokes([]);
       }
@@ -53,6 +55,7 @@ export default function App() {
     socket.on('round_start', ({ drawerId, drawerName, round }) => {
       setGameOverData(null); // Clear any old Game Over overlay on new game start
       setWordOptions([]);
+      setDrawerWord(null);
       setRevealedWord(null);
       setSyncedStrokes([]);
       setScreen('game');
@@ -72,6 +75,11 @@ export default function App() {
       setWordOptions(options);
     });
 
+    // ── Word to Draw (Sent ONLY to Drawer, works for manual or auto pick) ──
+    socket.on('drawer_word', ({ word }) => {
+      setDrawerWord(word);
+    });
+
     // ── Timer Tick (Every Second) ──
     socket.on('timer_tick', ({ timeLeft }) => {
       setRoom((prev) => (prev ? { ...prev, timeLeft } : prev));
@@ -81,6 +89,7 @@ export default function App() {
     socket.on('round_end', ({ word, scores }) => {
       setRevealedWord(word);
       setWordOptions([]);
+      setDrawerWord(null);
       setRoom((prev) => {
         if (!prev) return prev;
         return {
@@ -143,6 +152,7 @@ export default function App() {
       socket.off('game_state');
       socket.off('round_start');
       socket.off('word_options');
+      socket.off('drawer_word');
       socket.off('timer_tick');
       socket.off('round_end');
       socket.off('chat_message');
@@ -198,6 +208,7 @@ export default function App() {
       {screen === 'game' && room && (
         <GameScreen
           room={room}
+          drawerWord={drawerWord}
           syncedStrokes={syncedStrokes}
           wordOptions={wordOptions}
           revealedWord={revealedWord}

@@ -188,8 +188,15 @@ export function chooseWord(io, room, chosenWord) {
 
   console.log(`[${room.code}] Word chosen: "${room.word}". Mask sent to guessers: "${room.mask}"`);
 
-  // Broadcast drawing phase to everyone
+  // Broadcast drawing phase to everyone (with masked word)
   io.to(room.code).emit('game_state', getPublicSnapshot(room));
+
+  // Privately send the chosen word ONLY to the active drawer!
+  const drawer = room.players[room.drawerIndex];
+  const drawerSocket = io.sockets?.sockets?.get(drawer?.id);
+  if (drawerSocket) {
+    drawerSocket.emit('drawer_word', { word: room.word });
+  }
 
   // Drawing countdown timer
   room.timer = setInterval(() => {

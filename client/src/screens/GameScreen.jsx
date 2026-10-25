@@ -12,6 +12,7 @@ import Chat from '../components/Chat.jsx';
 
 export default function GameScreen({
   room,
+  drawerWord = null,
   syncedStrokes,
   wordOptions = [],
   revealedWord = null,
@@ -65,7 +66,7 @@ export default function GameScreen({
           {isDrawing && (
             <div style={styles.wordDisplay}>
               {isDrawer ? (
-                <span style={styles.secretWord}>WORD: {room?.word || room?.mask}</span>
+                <span style={styles.secretWord}>WORD: {drawerWord || room?.word || room?.mask}</span>
               ) : (
                 <span className="masked-word-text">
                   {room?.mask ? room.mask.split('').join(' ') : ''}
