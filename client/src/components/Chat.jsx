@@ -43,7 +43,7 @@ export default function Chat({
   }
 
   return (
-    <div style={styles.container}>
+    <div className="chat-panel">
       <h3 style={styles.title}>Guesses & Chat</h3>
 
       {/* ── Message Log ── */}
@@ -115,13 +115,11 @@ export default function Chat({
 
 const styles = {
   container: {
-    width: '260px',
     background: '#16213e',
     borderRadius: '10px',
     border: '1px solid #0f3460',
     display: 'flex',
     flexDirection: 'column',
-    height: '520px',
   },
   title: {
     margin: '0',

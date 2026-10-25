@@ -1,10 +1,190 @@
-/* index.css — global reset only. Keeps everything else self-contained. */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #1a1a2e; }
+/* index.css — global reset and responsive layout rules */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #1a1a2e;
+  color: #eee;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden;
+}
+
 code {
   font-family: 'Courier New', monospace;
   background: #0f3460;
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.9em;
+}
+
+/* ── Responsive Game Screen Layout ── */
+.game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 0.6rem 0.8rem;
+  background: #1a1a2e;
+  color: #eee;
+  width: 100%;
+}
+
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 1180px;
+  margin-bottom: 0.8rem;
+  background: #16213e;
+  padding: 0.7rem 1.2rem;
+  border-radius: 10px;
+  border: 1px solid #0f3460;
+  gap: 0.8rem;
+}
+
+.header-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.masked-word-text {
+  color: #ffa502;
+  font-weight: bold;
+  font-size: 1.5rem;
+  letter-spacing: 4px;
+  white-space: nowrap; /* Prevents vertical ladder wrapping on small screens */
+}
+
+.game-arena {
+  display: flex;
+  justify-content: center;
+  gap: 0.8rem;
+  width: 100%;
+  max-width: 1180px;
+}
+
+.stage-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 680px;
+  min-width: 0; /* Critical: prevents canvas flex container from collapsing to 0 width */
+  width: 100%;
+}
+
+.canvas-wrapper {
+  width: 100%;
+  height: 450px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  overflow: hidden;
+  position: relative;
+  user-select: none;
+}
+
+.scoreboard-panel {
+  width: 200px;
+  background: #16213e;
+  border-radius: 10px;
+  border: 1px solid #0f3460;
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  max-height: 520px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.scoreboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.chat-panel {
+  width: 260px;
+  background: #16213e;
+  border-radius: 10px;
+  border: 1px solid #0f3460;
+  display: flex;
+  flex-direction: column;
+  height: 520px;
+  flex-shrink: 0;
+}
+
+/* 📱 Mobile & Tablet Responsive Layout (< 850px) */
+@media (max-width: 850px) {
+  .game-container {
+    padding: 0.4rem;
+  }
+
+  .game-header {
+    flex-direction: column;
+    padding: 0.5rem 0.8rem;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .header-top-row {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .masked-word-text {
+    font-size: 1.25rem;
+    letter-spacing: 3px;
+    white-space: nowrap;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
+  .game-arena {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+  }
+
+  /* 1. Canvas is top priority: fully visible at the top */
+  .stage-center {
+    order: 1;
+    max-width: 100%;
+  }
+
+  .canvas-wrapper {
+    height: 300px; /* Perfectly sized for phone screens */
+  }
+
+  /* 2. Chat is directly below canvas for rapid typing */
+  .chat-panel {
+    order: 2;
+    width: 100%;
+    height: 230px;
+  }
+
+  /* 3. Scoreboard is at the bottom in compact chips */
+  .scoreboard-panel {
+    order: 3;
+    width: 100%;
+    max-height: 120px;
+    padding: 0.5rem;
+  }
+
+  .scoreboard-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+
+  .scoreboard-item {
+    flex: 1 1 calc(50% - 0.3rem);
+    min-width: 120px;
+  }
 }

@@ -34,16 +34,25 @@ export default function GameScreen({
   const currentDrawerName = room?.players?.find((p) => p.id === room.drawerId)?.name || 'Someone';
 
   return (
-    <div style={styles.container}>
+    <div className="game-container">
       {/* ── Top Header Bar ── */}
-      <div style={styles.header}>
-        <div style={styles.headerLeft}>
-          <span style={styles.badge}>
-            Round {room?.round || 1} / {room?.settings?.rounds || 3}
-          </span>
-          <span style={styles.drawerTag}>
-            {isDrawer ? '✏️ You are drawing!' : `👀 ${currentDrawerName} is drawing`}
-          </span>
+      <div className="game-header">
+        <div className="header-top-row">
+          <div style={styles.headerLeft}>
+            <span style={styles.badge}>
+              Round {room?.round || 1} / {room?.settings?.rounds || 3}
+            </span>
+            <span style={styles.drawerTag}>
+              {isDrawer ? '✏️ You are drawing!' : `👀 ${currentDrawerName} is drawing`}
+            </span>
+          </div>
+
+          <div style={styles.headerRight}>
+            <Timer timeLeft={room?.timeLeft} />
+            <button style={styles.leaveBtn} onClick={onLeaveRoom}>
+              Leave
+            </button>
+          </div>
         </div>
 
         <div style={styles.headerCenter}>
@@ -58,7 +67,7 @@ export default function GameScreen({
               {isDrawer ? (
                 <span style={styles.secretWord}>WORD: {room?.word || room?.mask}</span>
               ) : (
-                <span style={styles.maskedWord}>
+                <span className="masked-word-text">
                   {room?.mask ? room.mask.split('').join(' ') : ''}
                 </span>
               )}
@@ -71,26 +80,19 @@ export default function GameScreen({
             </span>
           )}
         </div>
-
-        <div style={styles.headerRight}>
-          <Timer timeLeft={room?.timeLeft} />
-          <button style={styles.leaveBtn} onClick={onLeaveRoom}>
-            Leave
-          </button>
-        </div>
       </div>
 
-      {/* ── 3-Column Game Arena ── */}
-      <div style={styles.arena}>
-        {/* Left Column: Player Scoreboard */}
+      {/* ── 3-Column / Mobile Responsive Game Arena ── */}
+      <div className="game-arena">
+        {/* Column A (Desktop Left / Mobile Bottom): Player Scoreboard */}
         <PlayerList
           players={room?.players}
           drawerId={room?.drawerId}
           hostId={room?.hostId}
         />
 
-        {/* Center Column: Toolbar + Canvas */}
-        <div style={styles.centerStage}>
+        {/* Column B (Desktop Center / Mobile Top): Toolbar + Canvas */}
+        <div className="stage-center">
           {isDrawer && isDrawing && (
             <Toolbar
               color={color}
@@ -108,7 +110,7 @@ export default function GameScreen({
           />
         </div>
 
-        {/* Right Column: Chat & Guesses */}
+        {/* Column C (Desktop Right / Mobile Middle): Chat & Guesses */}
         <Chat
           messages={messages}
           isDrawer={isDrawer}

@@ -187,7 +187,7 @@ export default function Canvas({ isDrawer, color, size, syncedStrokes = [] }) {
   const crosshairCursor = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><circle cx='12' cy='12' r='5' fill='none' stroke='%23000' stroke-width='2'/><circle cx='12' cy='12' r='4' fill='none' stroke='%23fff' stroke-width='1.5'/><line x1='12' y1='2' x2='12' y2='6' stroke='%23000' stroke-width='2'/><line x1='12' y1='18' x2='12' y2='22' stroke='%23000' stroke-width='2'/><line x1='2' y1='12' x2='6' y2='12' stroke='%23000' stroke-width='2'/><line x1='18' y1='12' x2='22' y2='12' stroke='%23000' stroke-width='2'/></svg>") 12 12, crosshair`;
 
   return (
-    <div style={styles.canvasWrapper}>
+    <div className="canvas-wrapper">
       <canvas
         ref={canvasRef}
         style={{

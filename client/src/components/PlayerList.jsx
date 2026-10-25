@@ -8,9 +8,9 @@ export default function PlayerList({ players = [], drawerId, hostId }) {
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
 
   return (
-    <div style={styles.container}>
+    <div className="scoreboard-panel">
       <h3 style={styles.title}>Scoreboard</h3>
-      <div style={styles.list}>
+      <div className="scoreboard-list">
         {sortedPlayers.map((p, index) => {
           const isDrawer = p.id === drawerId;
           const isHost = p.id === hostId;
@@ -19,6 +19,7 @@ export default function PlayerList({ players = [], drawerId, hostId }) {
           return (
             <div
               key={p.id}
+              className="scoreboard-item"
               style={{
                 ...styles.item,
                 background: p.hasGuessed ? '#064e3b' : '#0f3460', // Green if guessed!
@@ -46,7 +47,6 @@ export default function PlayerList({ players = [], drawerId, hostId }) {
 
 const styles = {
   container: {
-    width: '200px',
     background: '#16213e',
     borderRadius: '10px',
     border: '1px solid #0f3460',
