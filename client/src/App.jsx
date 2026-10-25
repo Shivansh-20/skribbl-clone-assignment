@@ -1,7 +1,7 @@
 // client/src/App.jsx
 // Phase 4: Chat messages, guess feedback, and full score synchronization.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import socket from './socket.js';
 import Home from './screens/Home.jsx';
 import Lobby from './screens/Lobby.jsx';
@@ -17,6 +17,7 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [showCloseHint, setShowCloseHint] = useState(false);
   const [gameOverData, setGameOverData] = useState(null);
+  const closeTimerRef = useRef(null);
 
   useEffect(() => {
     // ── Player Joined ──
@@ -104,9 +105,22 @@ export default function App() {
     });
 
     // ── Private "Close!" Hint for the Sender ──
-    socket.on('guess_close', () => {
+    socket.on('guess_close', (payload) => {
+      // 1. Reset floating banner timer without race condition
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
       setShowCloseHint(true);
-      setTimeout(() => setShowCloseHint(false), 2500); // Disappear after 2.5s
+      closeTimerRef.current = setTimeout(() => setShowCloseHint(false), 3000);
+
+      // 2. Also append a private orange alert to this player's message log
+      const alertText = payload?.text || 'You are so close! Try again!';
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + Math.random(),
+          kind: 'close',
+          text: alertText,
+        },
+      ]);
     });
 
     // ── Game Over ──

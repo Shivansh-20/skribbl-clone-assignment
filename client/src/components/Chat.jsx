@@ -57,6 +57,14 @@ export default function Chat({
             );
           }
 
+          if (msg.kind === 'close') {
+            return (
+              <div key={msg.id} style={styles.closeHint}>
+                🔥 {msg.text}
+              </div>
+            );
+          }
+
           return (
             <div key={msg.id} style={styles.chatMsg}>
               <strong style={styles.author}>{msg.playerName}:</strong>{' '}
