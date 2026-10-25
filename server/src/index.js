@@ -140,12 +140,20 @@ io.on('connection', (socket) => {
   });
 
   // ── 3. Start Game (Host only) ──────────────────────────────────────────────
-  socket.on('start_game', () => {
+  socket.on('start_game', (_payload, ack) => {
     const room = getRoomBySocket(socket);
-    if (!room || socket.id !== room.hostId) return;
+    if (!room) {
+      if (typeof ack === 'function') ack({ error: 'Room not found.' });
+      return;
+    }
+    if (socket.id !== room.hostId) {
+      if (typeof ack === 'function') ack({ error: 'Only the host can start the game.' });
+      return;
+    }
 
     if (room.players.length < 2) {
       console.warn(`[${room.code}] Need at least 2 players to start.`);
+      if (typeof ack === 'function') ack({ error: 'Need at least 2 players to start.' });
       return;
     }
 
@@ -155,6 +163,7 @@ io.on('connection', (socket) => {
 
     // Begin the turn cycle!
     startTurn(io, room);
+    if (typeof ack === 'function') ack({ ok: true });
   });
 
   // ── 4. Word Chosen (Drawer only) ───────────────────────────────────────────

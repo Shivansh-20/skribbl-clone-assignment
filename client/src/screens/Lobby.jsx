@@ -25,7 +25,11 @@ export default function Lobby({ room, onLeaveRoom }) {
   // ── Host clicks "Start Game" ───────────────────────────────────────────────
   function handleStartGame() {
     if (!isHost || !canStart) return;
-    socket.emit('start_game');
+    socket.emit('start_game', {}, (res) => {
+      if (res?.error) {
+        console.warn('Cannot start game:', res.error);
+      }
+    });
   }
 
   return (
