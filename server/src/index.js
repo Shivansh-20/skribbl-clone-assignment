@@ -28,10 +28,14 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT ?? 3001;
+const isProd = process.env.NODE_ENV === 'production';
 
 // ─── Express ────────────────────────────────────────────────────────────────
 const app = express();
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(cors({
+  origin: isProd ? true : 'http://localhost:5173',
+  credentials: true,
+}));
 
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
 app.use(express.static(clientDist));
@@ -48,8 +52,9 @@ app.get('*', (_req, res) => {
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: 'http://localhost:5173',
+    origin: isProd ? true : 'http://localhost:5173',
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
