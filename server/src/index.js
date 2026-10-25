@@ -316,6 +316,7 @@ io.on('connection', (socket) => {
       room.round = 0;
       room.drawerIndex = -1;
       room.strokes = [];
+      io.to(room.code).emit('canvas_clear');
       io.to(room.code).emit('chat_message', {
         id: Date.now() + Math.random(),
         kind: 'system',

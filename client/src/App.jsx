@@ -38,11 +38,19 @@ export default function App() {
         snapshot.phase === 'round_end'
       ) {
         setScreen('game');
+      } else if (snapshot.phase === 'lobby') {
+        // When returned to lobby (e.g., drawer disconnected or game reset)
+        setScreen('lobby');
+        setGameOverData(null); // Dismiss any stale Game Over overlay!
+        setWordOptions([]);
+        setRevealedWord(null);
+        setSyncedStrokes([]);
       }
     });
 
     // ── Round Start ──
     socket.on('round_start', ({ drawerId, drawerName, round }) => {
+      setGameOverData(null); // Clear any old Game Over overlay on new game start
       setWordOptions([]);
       setRevealedWord(null);
       setSyncedStrokes([]);
