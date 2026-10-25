@@ -188,15 +188,8 @@ export function chooseWord(io, room, chosenWord) {
 
   console.log(`[${room.code}] Word chosen: "${room.word}". Mask sent to guessers: "${room.mask}"`);
 
-  // Broadcast drawing phase to everyone (with masked word)
-  io.to(room.code).emit('game_state', getPublicSnapshot(room));
-
-  // Privately send the chosen word ONLY to the active drawer!
-  const drawer = room.players[room.drawerIndex];
-  const drawerSocket = io.sockets?.sockets?.get(drawer?.id);
-  if (drawerSocket) {
-    drawerSocket.emit('drawer_word', { word: room.word });
-  }
+  // Broadcast game state securely (drawer gets word, guessers get mask)
+  emitGameState(io, room);
 
   // Drawing countdown timer
   room.timer = setInterval(() => {
@@ -213,7 +206,7 @@ export function chooseWord(io, room, chosenWord) {
     // Phase 5 Hint 1: At 50% time left, reveal 1st letter hint in mask!
     if (room.timeLeft === Math.floor(room.settings.drawTime * 0.5)) {
       room.mask = revealHint(room.word, room.mask);
-      io.to(room.code).emit('game_state', getPublicSnapshot(room));
+      emitGameState(io, room);
       io.to(room.code).emit('chat_message', {
         id: Date.now() + Math.random(),
         kind: 'system',
@@ -224,7 +217,7 @@ export function chooseWord(io, room, chosenWord) {
     // Phase 5 Hint 2: At 25% time left, reveal 2nd letter hint (if word >= 5 chars)!
     if (room.timeLeft === Math.floor(room.settings.drawTime * 0.25) && room.word?.length >= 5) {
       room.mask = revealHint(room.word, room.mask);
-      io.to(room.code).emit('game_state', getPublicSnapshot(room));
+      emitGameState(io, room);
       io.to(room.code).emit('chat_message', {
         id: Date.now() + Math.random(),
         kind: 'system',
@@ -331,7 +324,7 @@ export function handleGuess(io, socket, room, text) {
     });
 
     // Broadcast updated game state so scoreboard reflects new score and green checkmark
-    io.to(room.code).emit('game_state', getPublicSnapshot(room));
+    emitGameState(io, room);
 
     // Check if ALL non-drawers have guessed correctly!
     const totalGuessers = room.players.length - 1;
@@ -427,4 +420,26 @@ export function getPublicSnapshot(room) {
     mask: room.mask,
     timeLeft: room.timeLeft,
   };
+}
+
+/**
+ * Helper: Securely broadcasts game state.
+ * - Guessers receive sanitized public snapshot (secret word is null).
+ * - Active drawer privately receives their secret word so it is always visible on their header.
+ */
+export function emitGameState(io, room) {
+  io.to(room.code).emit('game_state', getPublicSnapshot(room));
+
+  if (room.phase === 'drawing' && room.word) {
+    const drawer = room.players[room.drawerIndex];
+    if (drawer) {
+      // 1. Send dedicated drawer_word event
+      io.to(drawer.id).emit('drawer_word', { word: room.word });
+      // 2. Also send game_state with word attached so room.word is populated on drawer
+      io.to(drawer.id).emit('game_state', {
+        ...getPublicSnapshot(room),
+        word: room.word,
+      });
+    }
+  }
 }
