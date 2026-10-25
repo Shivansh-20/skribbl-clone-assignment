@@ -6,6 +6,7 @@ import socket from './socket.js';
 import Home from './screens/Home.jsx';
 import Lobby from './screens/Lobby.jsx';
 import GameScreen from './screens/GameScreen.jsx';
+import GameOverModal from './components/GameOverModal.jsx';
 
 export default function App() {
   const [screen, setScreen] = useState('home'); // 'home' | 'lobby' | 'game'
@@ -13,12 +14,9 @@ export default function App() {
   const [syncedStrokes, setSyncedStrokes] = useState([]);
   const [wordOptions, setWordOptions] = useState([]);
   const [revealedWord, setRevealedWord] = useState(null);
-
-  // Chat message history
   const [messages, setMessages] = useState([]);
-
-  // Flag to briefly flash the orange "You're so close!" hint to the sender
   const [showCloseHint, setShowCloseHint] = useState(false);
+  const [gameOverData, setGameOverData] = useState(null);
 
   useEffect(() => {
     // ── Player Joined ──
@@ -47,14 +45,15 @@ export default function App() {
     socket.on('round_start', ({ drawerId, drawerName, round }) => {
       setWordOptions([]);
       setRevealedWord(null);
+      setSyncedStrokes([]);
       setScreen('game');
-      // Announce the new round in chat
+      // Announce the new turn in chat
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now() + Math.random(),
           kind: 'system',
-          text: `Round ${round} started! ${drawerName} is drawing.`,
+          text: `🎨 Turn started: ${drawerName} is drawing! (Round ${round})`,
         },
       ]);
     });
@@ -86,7 +85,7 @@ export default function App() {
         {
           id: Date.now() + Math.random(),
           kind: 'system',
-          text: `Round ended! The word was: "${word}".`,
+          text: `🏁 Turn ended! The word was: "${word}".`,
         },
       ]);
     });
@@ -104,8 +103,7 @@ export default function App() {
 
     // ── Game Over ──
     socket.on('game_over', ({ winner, leaderboard }) => {
-      alert(`🏆 GAME OVER!\nWinner: ${winner?.name || 'Nobody'} with ${winner?.score || 0} pts!`);
-      setScreen('lobby');
+      setGameOverData({ winner, leaderboard });
     });
 
     // ── Stroke Sync & Clear ──
@@ -160,23 +158,40 @@ export default function App() {
     window.history.replaceState({}, '', url.pathname);
   }
 
-  if (screen === 'game' && room) {
-    return (
-      <GameScreen
-        room={room}
-        syncedStrokes={syncedStrokes}
-        wordOptions={wordOptions}
-        revealedWord={revealedWord}
-        messages={messages}
-        showCloseHint={showCloseHint}
-        onLeaveRoom={handleLeaveRoom}
-      />
-    );
+  function handlePlayAgain() {
+    setGameOverData(null);
+    setScreen('lobby');
   }
 
-  if (screen === 'lobby' && room) {
-    return <Lobby room={room} onLeaveRoom={handleLeaveRoom} />;
-  }
+  return (
+    <>
+      {gameOverData && (
+        <GameOverModal
+          winner={gameOverData.winner}
+          leaderboard={gameOverData.leaderboard}
+          onPlayAgain={handlePlayAgain}
+        />
+      )}
 
-  return <Home onJoinedRoom={handleJoinedRoom} />;
+      {screen === 'game' && room && (
+        <GameScreen
+          room={room}
+          syncedStrokes={syncedStrokes}
+          wordOptions={wordOptions}
+          revealedWord={revealedWord}
+          messages={messages}
+          showCloseHint={showCloseHint}
+          onLeaveRoom={handleLeaveRoom}
+        />
+      )}
+
+      {screen === 'lobby' && room && (
+        <Lobby room={room} onLeaveRoom={handleLeaveRoom} />
+      )}
+
+      {screen === 'home' && (
+        <Home onJoinedRoom={handleJoinedRoom} />
+      )}
+    </>
+  );
 }

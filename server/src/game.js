@@ -118,11 +118,14 @@ export function startTurn(io, room) {
   room.phase = 'choosing';
   room.round = turnResult.round;
   room.drawerIndex = turnResult.drawerIndex;
-  room.strokes = []; // Wipe canvas for new drawer
+  room.strokes = []; // Wipe canvas on server
   room.word = null;   // Secret word is hidden
   room.mask = '';
   room.timeLeft = CHOOSE_TIME;
   room.guessedCount = 0; // Tracks how many players correctly guessed this round
+
+  // Automatically clear canvas on all player screens for the new drawer!
+  io.to(room.code).emit('canvas_clear');
 
   // Reset guessing status for all players
   for (const player of room.players) {
@@ -144,7 +147,7 @@ export function startTurn(io, room) {
   });
 
   // Send word choices ONLY to the drawer (never to guessers!)
-  const drawerSocket = io.sockets.sockets.get(drawer.id);
+  const drawerSocket = io.sockets?.sockets?.get(drawer.id);
   if (drawerSocket) {
     drawerSocket.emit('word_options', { options: wordOptions, chooseTime: CHOOSE_TIME });
   }
@@ -197,6 +200,29 @@ export function chooseWord(io, room, chosenWord) {
     if (room.timeLeft <= 0) {
       console.log(`[${room.code}] Draw time expired for word "${room.word}".`);
       endRound(io, room);
+      return;
+    }
+
+    // Phase 5 Hint 1: At 50% time left, reveal 1st letter hint in mask!
+    if (room.timeLeft === Math.floor(room.settings.drawTime * 0.5)) {
+      room.mask = revealHint(room.word, room.mask);
+      io.to(room.code).emit('game_state', getPublicSnapshot(room));
+      io.to(room.code).emit('chat_message', {
+        id: Date.now() + Math.random(),
+        kind: 'system',
+        text: '💡 A letter hint was revealed!',
+      });
+    }
+
+    // Phase 5 Hint 2: At 25% time left, reveal 2nd letter hint (if word >= 5 chars)!
+    if (room.timeLeft === Math.floor(room.settings.drawTime * 0.25) && room.word?.length >= 5) {
+      room.mask = revealHint(room.word, room.mask);
+      io.to(room.code).emit('game_state', getPublicSnapshot(room));
+      io.to(room.code).emit('chat_message', {
+        id: Date.now() + Math.random(),
+        kind: 'system',
+        text: '💡 Another letter hint was revealed!',
+      });
     }
   }, 1000);
 }
@@ -206,6 +232,7 @@ export function chooseWord(io, room, chosenWord) {
  * Stops drawing -> reveals secret word -> waits 5s -> advances to next turn.
  */
 export function endRound(io, room) {
+  if (room.phase === 'round_end') return; // Guard: Never end a round that has already ended!
   clearRoomTimer(room);
   room.phase = 'round_end';
 
@@ -221,10 +248,17 @@ export function endRound(io, room) {
     });
     drawer.score = (drawer.score || 0) + drawerPoints;
     if (drawerPoints > 0) {
+      // Special "Master Artist" recognition only when EVERYONE guessed with at least 20 seconds left on the clock!
+      const allGuessedEarly = (room.guessedCount || 0) >= guesserCount && room.timeLeft >= 20;
+
+      const messageText = allGuessedEarly
+        ? `🎨👨‍🎨 Master Artist! Everyone guessed early (${room.timeLeft}s left) — ${drawer.name} earned full ${drawerPoints} pts! 🖌️✨`
+        : `🎨 ${drawer.name} earned ${drawerPoints} pts as the drawer.`;
+
       io.to(room.code).emit('chat_message', {
-        id: Math.random().toString(36).substring(2, 9),
+        id: Date.now() + Math.random(),
         kind: 'system',
-        text: `🎨 ${drawer.name} earned ${drawerPoints} pts as the drawer!`,
+        text: messageText,
       });
     }
   }
@@ -253,7 +287,116 @@ export function endRound(io, room) {
  * @param {string} text - Raw guess text submitted by player
  */
 export function handleGuess(io, socket, room, text) {
-  // TODO: [Piece #8] Write handleGuess here in VS Code!
+  // safety check => must be "drawing phase"
+  if (room.phase !== 'drawing') return;
+
+  const player = room.players.find((p) => p.id === socket.id);
+  if (!player) return;
+
+  // safety check => Drawer cannot guess their own drawing
+  const isDrawer = socket.id === room.players[room.drawerIndex]?.id;
+  if (isDrawer) return;
+  
+  // if this player already guessed correctly this round, stop further movement
+  if (player.hasGuessed) return;
+
+  // Evaluate the guess against the secret word
+  const result = checkGuess(text, room.word); 
+
+  // Correct Guess case!
+  if (result === 'correct') {
+    player.hasGuessed = true;
+    room.guessedCount = (room.guessedCount || 0) + 1;
+
+    // calculating points
+    const points = calcGuesserPoints({
+      timeLeft: room.timeLeft,
+      drawTime: room.settings.drawTime || 80,
+      order: room.guessedCount,
+    });
+    player.score = (player.score || 0) + points;
+
+    // Broadcasting announcement, word not revealed
+    io.to(room.code).emit('chat_message', {
+      id: Date.now() + Math.random(),
+      kind: 'system',
+      text: `🎉 Yayyy! ${player.name} guessed the correct word! (+${points} pts)`,
+    });
+
+    // Broadcast updated game state so scoreboard reflects new score and green checkmark
+    io.to(room.code).emit('game_state', getPublicSnapshot(room));
+
+    // Check if ALL non-drawers have guessed correctly!
+    const totalGuessers = room.players.length - 1;
+    if (room.guessedCount >= totalGuessers) {
+      console.log(`[${room.code}] All players guessed the word! Ending round early.`);
+      if (room.timeLeft >= 20) {
+        io.to(room.code).emit('chat_message', {
+          id: Date.now() + Math.random(),
+          kind: 'system',
+          text: `⚡ Master Artist found! Everyone guessed with ${room.timeLeft}s remaining! 🏆🎨`,
+        });
+      }
+      endRound(io, room);
+    }
+    return;
+  }
+
+  // Case B: Close typo
+  if (result === 'close') {
+    // send hint only to this player
+    socket.emit('guess_close');
+
+    // still display the typo in public chat 
+    io.to(room.code).emit('chat_message', {
+      id: Date.now() + Math.random(),
+      kind: 'chat',
+      playerName: player.name,
+      text,
+    });
+    return;
+  }
+
+  // Case C: Wrong guess
+  // Broadcast message in chat for everyone
+  io.to(room.code).emit('chat_message', {
+    id: Date.now() + Math.random(),
+    kind: 'chat',
+    playerName: player.name,
+    text,
+  });
+}
+
+// ============================================================================
+// Piece #9: Letter Hint Revealer (Phase 5)
+// ============================================================================
+
+/**
+ * 5. Reveals one random hidden letter in the mask:
+ * @param {string} word - The secret word (e.g. "elephant")
+ * @param {string} currentMask - The current mask (e.g. "________")
+ * Returns: Updated mask with 1 letter revealed (e.g. "____h___")
+ */
+export function revealHint(word, currentMask) {
+  if (!word || !currentMask) return currentMask;
+  const chars = currentMask.split('');
+
+  // Find all character positions that are still hidden ('_')
+  const hiddenIndices = [];
+  for (let i = 0; i < chars.length; i++) {
+    if (chars[i] === '_') {
+      hiddenIndices.push(i);
+    }
+  }
+
+  // If only 1 hidden letter remains, don't give away the entire word
+  if (hiddenIndices.length <= 1) return currentMask;
+
+  // Pick one random hidden index to reveal
+  const randomIndex = hiddenIndices[Math.floor(Math.random() * hiddenIndices.length)];
+  chars[randomIndex] = word[randomIndex];
+
+  return chars.join('');
 }
 
 /**

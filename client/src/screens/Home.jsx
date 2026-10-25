@@ -145,7 +145,7 @@ export default function Home({ onJoinedRoom }) {
 
             <div style={styles.grid2}>
               <div>
-                <label style={styles.label}>Max Players (2–20)</label>
+                <label style={styles.label}>Max Players (Min 2)</label>
                 <input
                   type="number"
                   min="2"
@@ -156,7 +156,7 @@ export default function Home({ onJoinedRoom }) {
                 />
               </div>
               <div>
-                <label style={styles.label}>Rounds (2–10)</label>
+                <label style={styles.label}>Rounds (Min 2)</label>
                 <input
                   type="number"
                   min="2"
@@ -170,7 +170,7 @@ export default function Home({ onJoinedRoom }) {
 
             <div style={styles.grid2}>
               <div>
-                <label style={styles.label}>Draw Time (15–240s)</label>
+                <label style={styles.label}>Draw Time (Min 15s)</label>
                 <input
                   type="number"
                   min="15"
@@ -181,7 +181,7 @@ export default function Home({ onJoinedRoom }) {
                 />
               </div>
               <div>
-                <label style={styles.label}>Word Choices (1–5)</label>
+                <label style={styles.label}>Word Choices (Min 1)</label>
                 <input
                   type="number"
                   min="1"

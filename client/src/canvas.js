@@ -46,8 +46,8 @@ export function drawSegment(ctx, canvasEl, from, to, color, size) {
 
   ctx.save(); // Save current canvas settings
 
-  ctx.strokeStyle = color;
-  ctx.lineWidth = size;
+  ctx.strokeStyle = color || '#000000';
+  ctx.lineWidth = typeof size === 'number' && size > 0 ? size : 8;
   ctx.lineCap = 'round';   // Makes ends of lines rounded instead of square
   ctx.lineJoin = 'round';  // Makes corners smooth when dragging fast
 

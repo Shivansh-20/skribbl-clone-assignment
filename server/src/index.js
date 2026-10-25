@@ -209,7 +209,16 @@ io.on('connection', (socket) => {
       currentStroke.points.push({ x, y });
     }
 
-    socket.to(room.code).emit('draw_data', { kind: 'move', x, y });
+    const strokeColor = payload?.color || currentStroke?.color || '#000000';
+    const strokeSize = payload?.size || currentStroke?.size || 8;
+
+    socket.to(room.code).emit('draw_data', {
+      kind: 'move',
+      x,
+      y,
+      color: strokeColor,
+      size: strokeSize,
+    });
   });
 
   // ── 7. Drawing: draw_end ───────────────────────────────────────────────────
@@ -294,6 +303,22 @@ io.on('connection', (socket) => {
       players: room.players,
       hostId: room.hostId,
     });
+
+    // Edge case: If fewer than 2 players remain, stop the game and return to lobby
+    if (room.players.length < 2 && room.phase !== 'lobby') {
+      clearRoomTimer(room);
+      room.phase = 'lobby';
+      room.round = 0;
+      room.drawerIndex = -1;
+      room.strokes = [];
+      io.to(room.code).emit('chat_message', {
+        id: Date.now() + Math.random(),
+        kind: 'system',
+        text: '📢 Not enough players to continue. Returned to lobby.',
+      });
+      io.to(room.code).emit('game_state', getPublicSnapshot(room));
+      return;
+    }
 
     // If game was active and the drawer left -> end round immediately!
     if (room.phase === 'choosing' || room.phase === 'drawing') {

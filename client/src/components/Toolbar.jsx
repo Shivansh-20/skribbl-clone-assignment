@@ -3,11 +3,11 @@
 
 import socket from '../socket.js';
 
-// Standard Skribbl color palette
+// Standard Skribbl color palette (vibrant drawable colors; Eraser is used for white)
 const PALETTE = [
   '#000000', // Black
-  '#ffffff', // White
-  '#e94560', // Red
+  '#ff4757', // Red
+  '#ff6b81', // Pink
   '#ff9f43', // Orange
   '#feca57', // Yellow
   '#1dd1a1', // Green
